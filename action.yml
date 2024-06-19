@@ -5,7 +5,7 @@ inputs:
     description: 'The path to the report file or dir'
     required: true
   destinationDir:
-    description: 'The destination directory for the report type. Every report has to be in its own directory. The directory must exist.'
+    description: 'The destination directory for the report type. Every report has to be in its own directory'
     required: true
   keepAllVersions:
     description: 'Whether to keep timestamped version if set to true. Otherwise only the latest version will be saved and overwritten.'
@@ -30,9 +30,11 @@ runs:
       shell: bash
       id: preparation
       run: |
+        mkdir -p ${{ inputs.destinationDir }}
         if ${{ inputs.reportIsDirectory }}; then
           extension=
-          rm -r ${{ inputs.destinationDir }}/latest
+          rm -rf ${{ inputs.destinationDir }}/latest
+          mkdir -p ${{ inputs.destinationDir }}/latest
         else
           filepath=${{ inputs.filePath }}
           extension=.${filepath##*.}
