@@ -19,7 +19,7 @@ runs:
   using: 'composite'
   steps:
     - name: Check that file path does not target a directory
-      if: inputs.reportIsDirectory == 'false' 
+      if: inputs.reportIsDirectory == 'false'
       shell: bash
       run: |
         if [ -d "${{ inputs.filePath }}" ]; then
@@ -45,7 +45,7 @@ runs:
       shell: bash
       id: file-check
       run: |
-        if git status -s | grep " latest${{ steps.preparation.outputs.EXTENSION }}"; then
+        if git status -s --untracked-files | grep " latest${{ steps.preparation.outputs.EXTENSION }}"; then
           echo "file_changed=true" >> $GITHUB_OUTPUT
         else
           echo "file_changed=false" >> $GITHUB_OUTPUT
