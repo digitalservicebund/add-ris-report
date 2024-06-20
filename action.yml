@@ -34,7 +34,6 @@ runs:
         if ${{ inputs.reportIsDirectory }}; then
           extension=
           rm -rf ${{ inputs.destinationDir }}/latest
-          mkdir -p ${{ inputs.destinationDir }}/latest
         else
           filepath=${{ inputs.filePath }}
           extension=.${filepath##*.}
