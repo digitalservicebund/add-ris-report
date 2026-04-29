@@ -78,7 +78,7 @@ runs:
         else
           mkdir -p tmp/${{ inputs.destinationDir }}
           aws s3 cp s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} || true
-          if [ -f tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} ] && cmp -s ${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }}; then
+          if [ ! -f tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} ] || cmp -s ${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }}; then
             echo "file_changed=true" >> $GITHUB_OUTPUT
           else
             echo "file_changed=false" >> $GITHUB_OUTPUT
