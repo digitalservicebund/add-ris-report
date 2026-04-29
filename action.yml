@@ -15,6 +15,20 @@ inputs:
     description: 'Set to true if the report is not a file but a directory'
     default: 'false'
     required: false
+  BUCKET_ACCESS_KEY_ID:
+    description: "Access Key for the reports S3 Bucket"
+    required: true
+  BUCKET_SECRET_ACCESS_KEY:
+    description: "Secret Access Key for the reports S3 Bucket"
+    required: true
+  BUCKET_ENDPOINT_URL:
+    description: "Endpoint url for the reports S3 Bucket"
+    default: "https://object.storage.eu01.onstackit.cloud/"
+    required: false
+  BUCKET_REGION:
+    description: "Region for the reports S3 Bucket"
+    default: "eu01"
+    required: false
 runs:
   using: 'composite'
   steps:
@@ -40,27 +54,61 @@ runs:
         fi
         echo "EXTENSION=$extension" >> $GITHUB_OUTPUT
         cp -r ${{ inputs.filePath }} ${{ inputs.destinationDir }}/latest$extension
-    - name: Check if report has changed
+    - name: Check if report has changed (directory)
       shell: bash
       id: file-check
+      if: inputs.reportIsDirectory == 'true'
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.BUCKET_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.BUCKET_SECRET_ACCESS_KEY }}
+        AWS_ENDPOINT_URL_S3: ${{ inputs.BUCKET_ENDPOINT_URL }}
+        AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
       run: |
-        if git status -s --untracked-files | grep " latest${{ steps.preparation.outputs.EXTENSION }}"; then
+        mkdir tmp/${{ inputs.destinationDir }}/latest
+        aws s3 cp s3://${{ env.REPORTS_S3_BUCKET }}/${{ inputs.destinationDir }}/latest tmp/${{ inputs.destinationDir }}/latest || true
+        if diff -rq ${{ inputs.filePath }} tmp/${{ inputs.destinationDir }}/latest; then
           echo "file_changed=true" >> $GITHUB_OUTPUT
         else
           echo "file_changed=false" >> $GITHUB_OUTPUT
         fi
-      working-directory: ${{ inputs.destinationDir }}
+    - name: Check if report has changed (single file)
+      shell: bash
+      id: file-check
+      if: inputs.reportIsDirectory == 'false'
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.BUCKET_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.BUCKET_SECRET_ACCESS_KEY }}
+        AWS_ENDPOINT_URL_S3: ${{ inputs.BUCKET_ENDPOINT_URL }}
+        AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
+      run: |
+        mkdir tmp/${{ inputs.destinationDir }}
+        aws s3 cp s3://${{ env.REPORTS_S3_BUCKET }}/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} || true
+        if [ -f tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} ] && cmp -s ${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }}; then
+          echo "file_changed=true" >> $GITHUB_OUTPUT
+        else
+          echo "file_changed=false" >> $GITHUB_OUTPUT
+        fi
     - name: Add latest report
       shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.BUCKET_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.BUCKET_SECRET_ACCESS_KEY }}
+        AWS_ENDPOINT_URL_S3: ${{ inputs.BUCKET_ENDPOINT_URL }}
+        AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
       run: |
-        git add latest${{ steps.preparation.outputs.EXTENSION }}
+        aws s3 sync latest${{ steps.preparation.outputs.EXTENSION }} s3://${{ env.REPORTS_S3_BUCKET }}/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} --delete
       if: steps.file-check.outputs.file_changed == 'true'
       working-directory: ${{ inputs.destinationDir }}
     - name: Add timestamped report
       shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.BUCKET_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.BUCKET_SECRET_ACCESS_KEY }}
+        AWS_ENDPOINT_URL_S3: ${{ inputs.BUCKET_ENDPOINT_URL }}
+        AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
       run: |
         NOW=$(TZ=Europe/Berlin date +'%Y-%m-%dT%H%M%S')
         cp -r latest${{ steps.preparation.outputs.EXTENSION }} $NOW${{ steps.preparation.outputs.EXTENSION }}
-        git add $NOW${{ steps.preparation.outputs.EXTENSION }}
+        aws s3 sync $NOW${{ steps.preparation.outputs.EXTENSION }} s3://${{ env.REPORTS_S3_BUCKET }}/${{ inputs.destinationDir }}/$NOW${{ steps.preparation.outputs.EXTENSION }}
       if: steps.file-check.outputs.file_changed == 'true' && inputs.keepAllVersions == 'true'
       working-directory: ${{ inputs.destinationDir }}
