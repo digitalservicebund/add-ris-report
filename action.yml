@@ -123,7 +123,6 @@ runs:
         AWS_ENDPOINT_URL_S3: ${{ inputs.BUCKET_ENDPOINT_URL }}
         AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
       if: inputs.reportIsDirectory == 'false' && steps.file-check-file.outputs.file_changed == 'true' && inputs.keepAllVersions == 'true'
-      working-directory: ${{ inputs.destinationDir }}
       run: |
         NOW=$(TZ=Europe/Berlin date +'%Y-%m-%dT%H%M%S')
         extension=${${{ inputs.filePath }}##*.}
