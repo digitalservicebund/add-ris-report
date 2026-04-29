@@ -54,39 +54,31 @@ runs:
         fi
         echo "EXTENSION=$extension" >> $GITHUB_OUTPUT
         cp -r ${{ inputs.filePath }} ${{ inputs.destinationDir }}/latest$extension
-    - name: Check if report has changed (directory)
+    - name: Check if report has changed
       shell: bash
       id: file-check
-      if: inputs.reportIsDirectory == 'true'
       env:
         AWS_ACCESS_KEY_ID: ${{ inputs.BUCKET_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.BUCKET_SECRET_ACCESS_KEY }}
         AWS_ENDPOINT_URL_S3: ${{ inputs.BUCKET_ENDPOINT_URL }}
         AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
       run: |
-        mkdir tmp/${{ inputs.destinationDir }}/latest
-        aws s3 cp s3://${{ env.REPORTS_S3_BUCKET }}/${{ inputs.destinationDir }}/latest tmp/${{ inputs.destinationDir }}/latest || true
-        if diff -rq ${{ inputs.filePath }} tmp/${{ inputs.destinationDir }}/latest; then
-          echo "file_changed=true" >> $GITHUB_OUTPUT
+        if [ "${{ inputs.reportIsDirectory }}" = "true" ]; then
+          mkdir tmp/${{ inputs.destinationDir }}/latest
+          aws s3 cp s3://${{ env.REPORTS_S3_BUCKET }}/${{ inputs.destinationDir }}/latest tmp/${{ inputs.destinationDir }}/latest || true
+          if diff -rq ${{ inputs.filePath }} tmp/${{ inputs.destinationDir }}/latest; then
+            echo "file_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "file_changed=false" >> $GITHUB_OUTPUT
+          fi
         else
-          echo "file_changed=false" >> $GITHUB_OUTPUT
-        fi
-    - name: Check if report has changed (single file)
-      shell: bash
-      id: file-check
-      if: inputs.reportIsDirectory == 'false'
-      env:
-        AWS_ACCESS_KEY_ID: ${{ inputs.BUCKET_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ inputs.BUCKET_SECRET_ACCESS_KEY }}
-        AWS_ENDPOINT_URL_S3: ${{ inputs.BUCKET_ENDPOINT_URL }}
-        AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
-      run: |
-        mkdir tmp/${{ inputs.destinationDir }}
-        aws s3 cp s3://${{ env.REPORTS_S3_BUCKET }}/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} || true
-        if [ -f tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} ] && cmp -s ${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }}; then
-          echo "file_changed=true" >> $GITHUB_OUTPUT
-        else
-          echo "file_changed=false" >> $GITHUB_OUTPUT
+          mkdir tmp/${{ inputs.destinationDir }}
+          aws s3 cp s3://${{ env.REPORTS_S3_BUCKET }}/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} || true
+          if [ -f tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} ] && cmp -s ${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }}; then
+            echo "file_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "file_changed=false" >> $GITHUB_OUTPUT
+          fi
         fi
     - name: Add latest report
       shell: bash
