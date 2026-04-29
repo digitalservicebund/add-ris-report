@@ -125,7 +125,7 @@ runs:
       if: inputs.reportIsDirectory == 'false' && steps.file-check-file.outputs.file_changed == 'true'
       working-directory: ${{ inputs.destinationDir }}
       run: |
-        aws s3 cp latest${{ steps.preparation.outputs.EXTENSION }} s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}
+        aws s3 cp latest${{ steps.preparation.outputs.EXTENSION }} s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}/latest.{{ steps.preparation.outputs.EXTENSION }}
     - name: Add timestamped report (file)
       shell: bash
       env:
@@ -137,5 +137,4 @@ runs:
       working-directory: ${{ inputs.destinationDir }}
       run: |
         NOW=$(TZ=Europe/Berlin date +'%Y-%m-%dT%H%M%S')
-        cp -r latest${{ steps.preparation.outputs.EXTENSION }} $NOW${{ steps.preparation.outputs.EXTENSION }}
-        aws s3 cp $NOW${{ steps.preparation.outputs.EXTENSION }} s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}
+        aws s3 cp latest${{ steps.preparation.outputs.EXTENSION }} s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}/$NOW${{ steps.preparation.outputs.EXTENSION }}
