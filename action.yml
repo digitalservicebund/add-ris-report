@@ -64,7 +64,7 @@ runs:
         AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
       run: |
         if [ "${{ inputs.reportIsDirectory }}" = "true" ]; then
-          mkdir tmp/${{ inputs.destinationDir }}/latest
+          mkdir -p tmp/${{ inputs.destinationDir }}/latest
           aws s3 cp s3://${{ env.REPORTS_S3_BUCKET }}/${{ inputs.destinationDir }}/latest tmp/${{ inputs.destinationDir }}/latest || true
           if diff -rq ${{ inputs.filePath }} tmp/${{ inputs.destinationDir }}/latest; then
             echo "file_changed=true" >> $GITHUB_OUTPUT
@@ -72,7 +72,7 @@ runs:
             echo "file_changed=false" >> $GITHUB_OUTPUT
           fi
         else
-          mkdir tmp/${{ inputs.destinationDir }}
+          mkdir -p tmp/${{ inputs.destinationDir }}
           aws s3 cp s3://${{ env.REPORTS_S3_BUCKET }}/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} || true
           if [ -f tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} ] && cmp -s ${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }}; then
             echo "file_changed=true" >> $GITHUB_OUTPUT
