@@ -71,9 +71,9 @@ runs:
         mkdir -p tmp/${{ inputs.destinationDir }}/latest
         aws s3 cp s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}/latest tmp/${{ inputs.destinationDir }}/latest || true
         if diff -rq ${{ inputs.filePath }} tmp/${{ inputs.destinationDir }}/latest; then
-          echo "file_changed=true" >> $GITHUB_OUTPUT
-        else
           echo "file_changed=false" >> $GITHUB_OUTPUT
+        else
+          echo "file_changed=true" >> $GITHUB_OUTPUT
         fi
     - name: Add latest report (directory)
       shell: bash
