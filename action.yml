@@ -112,12 +112,12 @@ runs:
       run: |
         mkdir -p tmp/${{ inputs.destinationDir }}
         aws s3 cp s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} || true
-        if [ ! -f tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} ] || cmp -s ${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }}; then
-          echo "File changed"
-          echo "file_changed=true" >> $GITHUB_OUTPUT
-        else
+        if [ -f tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} ] && cmp -s ${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }} tmp/${{ inputs.destinationDir }}/latest${{ steps.preparation.outputs.EXTENSION }}; then
           echo "Files are the same"
           echo "file_changed=false" >> $GITHUB_OUTPUT
+        else
+          echo "File changed"
+          echo "file_changed=true" >> $GITHUB_OUTPUT
         fi
     - name: Add latest report (file)
       shell: bash
