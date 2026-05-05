@@ -97,7 +97,8 @@ runs:
         AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
       if: inputs.reportIsDirectory == 'false'
       run: |
-        extension=${${{ inputs.filePath }}##*.}
+        filepath=${{ inputs.filePath }}
+        extension=${filepath##*.}
         mkdir -p tmp/${{ inputs.destinationDir }}
         aws s3 cp --only-show-errors s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}/latest.$extension tmp/${{ inputs.destinationDir }}/latest.$extension || true
         if [ -f tmp/${{ inputs.destinationDir }}/latest.$extension ] && cmp -s ${{ inputs.filePath }} tmp/${{ inputs.destinationDir }}/latest.$extension; then
@@ -116,7 +117,8 @@ runs:
         AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
       if: inputs.reportIsDirectory == 'false' && steps.file-check-file.outputs.file_changed == 'true'
       run: |
-        extension=${${{ inputs.filePath }}##*.}
+        filepath=${{ inputs.filePath }}
+        extension=${filepath##*.}
         aws s3 cp --only-show-errors ${{ inputs.filePath }} s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}/latest.$extension
     - name: Add timestamped report (file)
       shell: bash
@@ -128,5 +130,6 @@ runs:
       if: inputs.reportIsDirectory == 'false' && steps.file-check-file.outputs.file_changed == 'true' && inputs.keepAllVersions == 'true'
       run: |
         NOW=$(TZ=Europe/Berlin date +'%Y-%m-%dT%H%M%S')
-        extension=${${{ inputs.filePath }}##*.}
+        filepath=${{ inputs.filePath }}
+        extension=${filepath##*.}
         aws s3 cp --only-show-errors ${{ inputs.filePath }} s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}/$NOW.$extension
