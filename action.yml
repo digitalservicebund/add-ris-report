@@ -56,7 +56,6 @@ runs:
       run: |
         set -euo pipefail
         aws configure set default.s3.max_concurrent_requests 200
-        aws configure set default.s3.max_queue_size 10000
         DEST="s3://$BUCKET/$DIR"
         now=$(TZ=Europe/Berlin date +'%Y-%m-%dT%H%M%S')
         tmp=$(mktemp -d)
