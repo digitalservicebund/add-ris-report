@@ -15,6 +15,10 @@ inputs:
     description: 'Set to true if the report is not a file but a directory'
     default: 'false'
     required: false
+  skipComparison:
+    description: 'Set to true to always upload the report without downloading and comparing the previous one. Useful for reports that change on every run.'
+    default: 'false'
+    required: false
   BUCKET_ACCESS_KEY_ID:
     description: "Access Key for the reports S3 Bucket"
     required: true
@@ -48,26 +52,30 @@ runs:
         DIR: ${{ inputs.destinationDir }}
         KEEP_ALL: ${{ inputs.keepAllVersions }}
         IS_DIR: ${{ inputs.reportIsDirectory }}
+        SKIP_COMPARISON: ${{ inputs.skipComparison }}
       run: |
         set -euo pipefail
-        aws configure set default.s3.max_concurrent_requests 50
+        aws configure set default.s3.max_concurrent_requests 200
+        aws configure set default.s3.max_queue_size 10000
         DEST="s3://$BUCKET/$DIR"
         now=$(TZ=Europe/Berlin date +'%Y-%m-%dT%H%M%S')
         tmp=$(mktemp -d)
 
         if [ "$IS_DIR" = "true" ]; then
-          latest=$(aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "$DIR/" --delimiter / \
-            --query 'max(CommonPrefixes[].Prefix)' --output text)
-
-          if [ "$latest" != "None" ]; then
-            aws s3 sync --only-show-errors "s3://$BUCKET/$latest" "$tmp"
-            if diff -rq "$FILE_PATH" "$tmp"; then
-              echo "Files are the same"
-              exit 0
+          if [ "$SKIP_COMPARISON" != "true" ]; then
+            latest=$(aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "$DIR/" --delimiter / \
+              --query 'max(CommonPrefixes[].Prefix)' --output text)
+            if [ "$latest" != "None" ]; then
+              aws s3 sync --only-show-errors "s3://$BUCKET/$latest" "$tmp"
+              if diff -rq "$FILE_PATH" "$tmp"; then
+                echo "Files are the same"
+                exit 0
+              fi
             fi
+
+            echo "Files changed"
           fi
 
-          echo "Files changed"
           aws s3 sync --only-show-errors "$FILE_PATH" "$DEST/$now"
 
           if [ "$KEEP_ALL" != "true" ]; then
@@ -80,13 +88,15 @@ runs:
           fi
           ext="${FILE_PATH##*.}"
 
-          aws s3 cp --only-show-errors "$DEST/latest.$ext" "$tmp/latest" || true
-          if [ -f "$tmp/latest" ] && cmp -s "$FILE_PATH" "$tmp/latest"; then
-            echo "Files are the same"
-            exit 0
-          fi
+          if [ "$SKIP_COMPARISON" != "true" ]; then
+            aws s3 cp --only-show-errors "$DEST/latest.$ext" "$tmp/latest" || true
+            if [ -f "$tmp/latest" ] && cmp -s "$FILE_PATH" "$tmp/latest"; then
+              echo "Files are the same"
+              exit 0
+            fi
 
-          echo "File changed"
+            echo "File changed"
+          fi
 
           aws s3 cp --only-show-errors "$FILE_PATH" "$DEST/latest.$ext"
 

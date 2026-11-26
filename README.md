@@ -17,3 +17,7 @@ Downloads the latest report (or a sub path of it) into a local directory:
 ```
 
 It skips silently (output `found=false`) if no report exists.
+
+## Performance
+Directory reports with thousands of small files (e.g. Allure) are slow to compare, upload and delete.
+Set `skipComparison: true` to skip downloading and diffing the previous report when it changes on every run anyway.
