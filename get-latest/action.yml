@@ -1,0 +1,69 @@
+name: "Get latest report"
+description: "Downloads (a part of) the latest directory report stored by add-ris-report"
+inputs:
+  sourceDir:
+    description: 'The destinationDir the report was stored with'
+    required: true
+  subPath:
+    description: 'Optional path inside the report to download, e.g. "history"'
+    default: ''
+    required: false
+  targetPath:
+    description: 'Local directory to download into'
+    required: true
+  BUCKET_ACCESS_KEY_ID:
+    description: "Access Key for the reports S3 Bucket."
+    required: true
+  BUCKET_SECRET_ACCESS_KEY:
+    description: "Secret Access Key for the reports S3 Bucket"
+    required: true
+  BUCKET_ENDPOINT_URL:
+    description: "Endpoint url for the reports S3 Bucket"
+    default: "https://object.storage.eu01.onstackit.cloud/"
+    required: false
+  BUCKET_REGION:
+    description: "Region for the reports S3 Bucket"
+    default: "eu01"
+    required: false
+  BUCKET_NAME:
+    description: "Name of the reports S3 Bucket"
+    default: "ds-ris-reports-prod"
+    required: false
+outputs:
+  found:
+    description: "'true' if a report was downloaded, otherwise 'false'"
+    value: ${{ steps.download.outputs.found }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Download latest report
+      id: download
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.BUCKET_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.BUCKET_SECRET_ACCESS_KEY }}
+        AWS_ENDPOINT_URL_S3: ${{ inputs.BUCKET_ENDPOINT_URL }}
+        AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
+        BUCKET: ${{ inputs.BUCKET_NAME }}
+        DIR: ${{ inputs.sourceDir }}
+        SUB_PATH: ${{ inputs.subPath }}
+        TARGET: ${{ inputs.targetPath }}
+      run: |
+        set -euo pipefail
+        echo "found=false" >> "$GITHUB_OUTPUT"
+
+        if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+          echo "No bucket credentials; skipping"
+          exit 0
+        fi
+
+        latest=$(aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "$DIR/" --delimiter / \
+          --query 'max(CommonPrefixes[].Prefix)' --output text)
+        if [ "$latest" = "None" ]; then
+          echo "No report found in $DIR"
+          exit 0
+        fi
+
+        mkdir -p "$TARGET"
+        aws s3 sync --only-show-errors "s3://$BUCKET/$latest${SUB_PATH:+$SUB_PATH/}" "$TARGET"
+        echo "found=true" >> "$GITHUB_OUTPUT"
