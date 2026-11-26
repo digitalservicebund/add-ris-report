@@ -44,28 +44,30 @@ runs:
         AWS_ENDPOINT_URL_S3: ${{ inputs.BUCKET_ENDPOINT_URL }}
         AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
         FILE_PATH: ${{ inputs.filePath }}
-        DEST: s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}
+        BUCKET: ${{ inputs.BUCKET_NAME }}
+        DIR: ${{ inputs.destinationDir }}
         KEEP_ALL: ${{ inputs.keepAllVersions }}
         IS_DIR: ${{ inputs.reportIsDirectory }}
       run: |
         set -euo pipefail
         aws configure set default.s3.max_concurrent_requests 50
+        DEST="s3://$BUCKET/$DIR"
         now=$(TZ=Europe/Berlin date +'%Y-%m-%dT%H%M%S')
         tmp=$(mktemp -d)
 
         if [ "$IS_DIR" = "true" ]; then
-          latest=$(aws s3 ls "$DEST/" \
-            | awk '$1 == "PRE" && $2 ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}\/$/ { sub(/\/$/, "", $2); print $2 }' \
-            | sort | tail -n 1)
+          latest=$(aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "$DIR/" --delimiter / \
+            --query 'max(CommonPrefixes[].Prefix)' --output text)
 
-          [ -z "$latest" ] || aws s3 sync --only-show-errors "$DEST/$latest" "$tmp"
-          if [ -n "$latest" ] && diff -rq "$FILE_PATH" "$tmp"; then
-            echo "Files are the same"
-            exit 0
+          if [ "$latest" != "None" ]; then
+            aws s3 sync --only-show-errors "s3://$BUCKET/$latest" "$tmp"
+            if diff -rq "$FILE_PATH" "$tmp"; then
+              echo "Files are the same"
+              exit 0
+            fi
           fi
 
           echo "Files changed"
-
           aws s3 sync --only-show-errors "$FILE_PATH" "$DEST/$now"
 
           if [ "$KEEP_ALL" != "true" ]; then
