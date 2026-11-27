@@ -1,10 +1,11 @@
 # GitHub Action
-This action should be used to prepare a git push to the [ris-reports repository](https://github.com/digitalservicebund/ris-reports/).
+This action should be used to upload reports to the [ris-reports](https://github.com/digitalservicebund/ris-reports/) s3
+bucket.
 
-It handles timestamping of the reports and only executes a `git add` if the report file has changed.
+It handles timestamping of the reports and only uploads them if the report has changed.
 
-## get-latest
-Downloads the latest report (or a sub path of it) into a local directory:
+## Get latest report
+Additional action to download the latest report (or a sub path of it) into a local directory:
 
 ```yaml
 - uses: digitalservicebund/add-ris-report/get-latest@main
