@@ -1,5 +1,5 @@
-name: "git add a report if it has changed"
-description: "Uploads reports only when they have changed, retaining timestamped versions when requested"
+name: "Upload a report"
+description: "Uploads a report for ris-reports. Ignores report that have not changed and retains a history when requested"
 inputs:
   filePath:
     description: 'The path to the report file or dir'

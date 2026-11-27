@@ -1,4 +1,4 @@
-name: "Get latest report"
+name: "Download latest report"
 description: "Downloads (a part of) the latest directory report stored by add-ris-report"
 inputs:
   sourceDir:
