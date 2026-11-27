@@ -1,5 +1,5 @@
 name: "Upload a report"
-description: "Uploads a report for ris-reports. Ignores report that have not changed and retains a history when requested"
+description: "Uploads a report for ris-reports. Ignores reports that have not changed and retains a history when requested"
 inputs:
   filePath:
     description: 'The path to the report file or dir'
