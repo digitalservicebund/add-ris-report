@@ -1,5 +1,5 @@
-name: "git add a report if it has changed"
-description: "The files are only added if there is no 'latest.<fileExtension>' file (or 'latest' dir) or if it has changed"
+name: "Upload a report"
+description: "Uploads a report for ris-reports. Ignores reports that have not changed and retains a history when requested"
 inputs:
   filePath:
     description: 'The path to the report file or dir'
@@ -8,11 +8,15 @@ inputs:
     description: 'The destination directory for the report type. Every report has to be in its own directory'
     required: true
   keepAllVersions:
-    description: 'Whether to keep timestamped version if set to true. Otherwise only the latest version will be saved and overwritten.'
+    description: 'Whether to keep prior versions. Directory reports are always stored in timestamped folders; when false, only the newest folder is kept.'
     default: 'true'
     required: false
   reportIsDirectory:
     description: 'Set to true if the report is not a file but a directory'
+    default: 'false'
+    required: false
+  skipComparison:
+    description: 'Set to true to always upload the report without downloading and comparing the previous one. Useful for reports that change on every run.'
     default: 'false'
     required: false
   BUCKET_ACCESS_KEY_ID:
@@ -36,100 +40,66 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Setup s3 cli
+    - name: Store report if changed
       shell: bash
-      run: aws configure set default.s3.max_concurrent_requests 50
-    - name: Check that file path does not target a directory
-      if: inputs.reportIsDirectory == 'false'
-      shell: bash
-      run: |
-        if [ -d "${{ inputs.filePath }}" ]; then
-          echo "File is a directory. Set input 'reportIsDirectory' to 'true'."
-          exit 1
-        fi
-    - name: Check if report has changed (directory)
-      shell: bash
-      id: file-check-directory
       env:
         AWS_ACCESS_KEY_ID: ${{ inputs.BUCKET_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.BUCKET_SECRET_ACCESS_KEY }}
         AWS_ENDPOINT_URL_S3: ${{ inputs.BUCKET_ENDPOINT_URL }}
         AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
-      if: inputs.reportIsDirectory == 'true'
+        FILE_PATH: ${{ inputs.filePath }}
+        BUCKET: ${{ inputs.BUCKET_NAME }}
+        DIR: ${{ inputs.destinationDir }}
+        KEEP_ALL: ${{ inputs.keepAllVersions }}
+        IS_DIR: ${{ inputs.reportIsDirectory }}
+        SKIP_COMPARISON: ${{ inputs.skipComparison }}
       run: |
-        mkdir -p tmp/add-ris-report/${{ inputs.destinationDir }}/latest
-        aws s3 sync --only-show-errors s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}/latest tmp/add-ris-report/${{ inputs.destinationDir }}/latest || true
-        if diff -rq ${{ inputs.filePath }} tmp/add-ris-report/${{ inputs.destinationDir }}/latest; then
-          echo "Files are the same"
-          echo "file_changed=false" >> $GITHUB_OUTPUT
+        set -euo pipefail
+        aws configure set default.s3.max_concurrent_requests 200
+        DEST="s3://$BUCKET/$DIR"
+        now=$(TZ=Europe/Berlin date +'%Y-%m-%dT%H%M%S')
+        tmp=$(mktemp -d)
+
+        if [ "$IS_DIR" = "true" ]; then
+          if [ "$SKIP_COMPARISON" != "true" ]; then
+            latest=$(aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "$DIR/" --delimiter / \
+              --query 'max(CommonPrefixes[].Prefix)' --output text)
+            if [ "$latest" != "None" ]; then
+              aws s3 sync --only-show-errors "s3://$BUCKET/$latest" "$tmp"
+              if diff -rq "$FILE_PATH" "$tmp"; then
+                echo "Files are the same"
+                exit 0
+              fi
+            fi
+
+            echo "Files changed"
+          fi
+
+          aws s3 sync --only-show-errors "$FILE_PATH" "$DEST/$now"
+
+          if [ "$KEEP_ALL" != "true" ]; then
+            aws s3 rm --only-show-errors "$DEST/" --recursive --exclude "$now/*"
+          fi
         else
-          echo "Files changed"
-          echo "file_changed=true" >> $GITHUB_OUTPUT
+          if [ -d "$FILE_PATH" ]; then
+            echo "File is a directory. Set input 'reportIsDirectory' to 'true'."
+            exit 1
+          fi
+          ext="${FILE_PATH##*.}"
+
+          if [ "$SKIP_COMPARISON" != "true" ]; then
+            aws s3 cp --only-show-errors "$DEST/latest.$ext" "$tmp/latest" || true
+            if [ -f "$tmp/latest" ] && cmp -s "$FILE_PATH" "$tmp/latest"; then
+              echo "Files are the same"
+              exit 0
+            fi
+
+            echo "File changed"
+          fi
+
+          aws s3 cp --only-show-errors "$FILE_PATH" "$DEST/latest.$ext"
+
+          if [ "$KEEP_ALL" = "true" ]; then
+            aws s3 cp --only-show-errors "$FILE_PATH" "$DEST/$now.$ext"
+          fi
         fi
-    - name: Add latest report (directory)
-      shell: bash
-      env:
-        AWS_ACCESS_KEY_ID: ${{ inputs.BUCKET_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ inputs.BUCKET_SECRET_ACCESS_KEY }}
-        AWS_ENDPOINT_URL_S3: ${{ inputs.BUCKET_ENDPOINT_URL }}
-        AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
-      if: inputs.reportIsDirectory == 'true' && steps.file-check-directory.outputs.file_changed == 'true'
-      run: |
-        aws s3 sync --only-show-errors ${{ inputs.filePath }} s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}/latest --delete
-    - name: Add timestamped report (directory)
-      shell: bash
-      env:
-        AWS_ACCESS_KEY_ID: ${{ inputs.BUCKET_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ inputs.BUCKET_SECRET_ACCESS_KEY }}
-        AWS_ENDPOINT_URL_S3: ${{ inputs.BUCKET_ENDPOINT_URL }}
-        AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
-      if: inputs.reportIsDirectory == 'true' && steps.file-check-directory.outputs.file_changed == 'true' && inputs.keepAllVersions == 'true'
-      run: |
-        NOW=$(TZ=Europe/Berlin date +'%Y-%m-%dT%H%M%S')
-        aws s3 sync --only-show-errors ${{ inputs.filePath }} s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}/$NOW
-    - name: Check if report has changed (file)
-      shell: bash
-      id: file-check-file
-      env:
-        AWS_ACCESS_KEY_ID: ${{ inputs.BUCKET_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ inputs.BUCKET_SECRET_ACCESS_KEY }}
-        AWS_ENDPOINT_URL_S3: ${{ inputs.BUCKET_ENDPOINT_URL }}
-        AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
-      if: inputs.reportIsDirectory == 'false'
-      run: |
-        filepath=${{ inputs.filePath }}
-        extension=${filepath##*.}
-        mkdir -p tmp/add-ris-report/${{ inputs.destinationDir }}
-        aws s3 cp --only-show-errors s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}/latest.$extension tmp/add-ris-report/${{ inputs.destinationDir }}/latest.$extension || true
-        if [ -f tmp/add-ris-report/${{ inputs.destinationDir }}/latest.$extension ] && cmp -s ${{ inputs.filePath }} tmp/add-ris-report/${{ inputs.destinationDir }}/latest.$extension; then
-          echo "Files are the same"
-          echo "file_changed=false" >> $GITHUB_OUTPUT
-        else
-          echo "File changed"
-          echo "file_changed=true" >> $GITHUB_OUTPUT
-        fi
-    - name: Add latest report (file)
-      shell: bash
-      env:
-        AWS_ACCESS_KEY_ID: ${{ inputs.BUCKET_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ inputs.BUCKET_SECRET_ACCESS_KEY }}
-        AWS_ENDPOINT_URL_S3: ${{ inputs.BUCKET_ENDPOINT_URL }}
-        AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
-      if: inputs.reportIsDirectory == 'false' && steps.file-check-file.outputs.file_changed == 'true'
-      run: |
-        filepath=${{ inputs.filePath }}
-        extension=${filepath##*.}
-        aws s3 cp --only-show-errors ${{ inputs.filePath }} s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}/latest.$extension
-    - name: Add timestamped report (file)
-      shell: bash
-      env:
-        AWS_ACCESS_KEY_ID: ${{ inputs.BUCKET_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ inputs.BUCKET_SECRET_ACCESS_KEY }}
-        AWS_ENDPOINT_URL_S3: ${{ inputs.BUCKET_ENDPOINT_URL }}
-        AWS_DEFAULT_REGION: ${{ inputs.BUCKET_REGION }}
-      if: inputs.reportIsDirectory == 'false' && steps.file-check-file.outputs.file_changed == 'true' && inputs.keepAllVersions == 'true'
-      run: |
-        NOW=$(TZ=Europe/Berlin date +'%Y-%m-%dT%H%M%S')
-        filepath=${{ inputs.filePath }}
-        extension=${filepath##*.}
-        aws s3 cp --only-show-errors ${{ inputs.filePath }} s3://${{ inputs.BUCKET_NAME }}/${{ inputs.destinationDir }}/$NOW.$extension
